@@ -46,3 +46,41 @@ export async function getRentals(req, res) {
       res.status(500).send(err);
     }
   }
+export async function postRentals(req, res) {
+  try {
+    const { customerId, gameId, daysRented } = req.body;
+
+    const customer = await db.query("SELECT * FROM customers WHERE id = $1", [
+      customerId,
+    ]);
+    if (customer.rows.length === 0) {
+      return res.status(400).send("Invalid customerId");
+    }
+
+    const game = await db.query("SELECT * FROM games WHERE id = $1", [gameId]);
+    if (game.rows.length === 0) return res.status(400).send("Invalid gameId");
+
+
+    const rentalsCount = await db.query(
+      "SELECT COUNT(*) FROM rentals WHERE game_id = $1 AND return_date IS NULL",
+      [gameId]
+    );
+    const gameStock = await db.query("SELECT stockTotal FROM games WHERE id = $1", [gameId]);
+    if (rentalsCount.rows[0].count >= gameStock.rows[0].stockTotal) {
+      return res.status(400).send("No available games for rental");
+    }
+    const rentDate = new Date().toISOString().substring(0, 10);
+    const originalPrice = daysRented * game.rows[0].pricePerDay;
+   
+    if (daysRented <= 0) return res.status(400).send("Invalid daysRented");
+
+    
+    await db.query(
+      "INSERT INTO rentals (customer_id, game_id, rent_date, days_rented, original_price) VALUES ($1, $2, $3, $4, $5)",
+      [customerId, gameId, rentDate, daysRented, originalPrice]);
+
+    res.sendStatus(201);
+}catch(err){
+  res.status(500).send(err)
+}
+}
